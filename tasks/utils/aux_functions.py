@@ -19,7 +19,7 @@ def agg_assign(gb, fdict):
     return pd.DataFrame(data)
 
 
-def univariate_analysis(df, feature, flag, bins=None, precision=2, detail=True):
+def univariate_analysis(df, feature, flag, bins=None, woe=False, precision=2, detail=True):
     """ Univarate analysis
 
     The feature is binned in multiple intervals and for each bin is shown:
@@ -37,9 +37,42 @@ def univariate_analysis(df, feature, flag, bins=None, precision=2, detail=True):
 
     """
     if bins:
-        s = pd.concat([pd.cut(df[feature], bins=bins, precision=precision), df['flag']], axis=1).groupby(feature)['flag'].mean().rename(columns={'flag': 0})
-        s_n1 = pd.concat([pd.cut(df[feature], bins=bins, precision=precision), df['flag']], axis=1).groupby(feature)['flag'].sum().rename(columns={'flag': 1})
-        s_n = pd.concat([pd.cut(df[feature], bins=bins, precision=precision), df['flag']], axis=1).groupby(feature)['flag'].count().rename(columns={'flag': 2})
+        s = pd.concat([pd.cut(df[feature], bins=bins, precision=precision), df[flag]], axis=1).groupby(feature)[flag].mean().rename(columns={flag: 0})
+        s_n1 = pd.concat([pd.cut(df[feature], bins=bins, precision=precision), df[flag]], axis=1).groupby(feature)[flag].sum().rename(columns={flag: 1})
+        s_n = pd.concat([pd.cut(df[feature], bins=bins, precision=precision), df[flag]], axis=1).groupby(feature)[flag].count().rename(columns={flag: 2})
+
+        if woe:
+            # Weight of Evidence Calculation
+            funcs = {
+                'flag': {
+                    'sum': 'sum',
+                    'count': 'count',
+                }
+            }
+
+            df_feature = pd.concat([pd.cut(df[feature], bins=bins, precision=precision), df[flag]], axis=1)
+            df_woe = df_feature.groupby(feature).pipe(agg_assign, fdict=funcs)
+
+            n1_total = df_woe[(flag, 'sum')].sum()
+            n0_total = df_woe[(flag, 'count')].sum() - n1_total
+
+            s_woe = pd.Series(np.zeros(len(df_woe),), name="woe")
+            i = 0
+            for idx, row in df_woe.iterrows():
+                n1 = row[(flag, 'sum')]
+                n0 = row[(flag, 'count')] - n1
+                if n1_total != 0 and n0_total != 0 and n1 != 0:
+                    woe = np.log((n0/n0_total)/(n1/n1_total))
+                    s_woe[i] = woe
+                    i += 1
+            df_woe = pd.concat([df_woe.reset_index()[feature], s_woe], axis=1)
+
+            df_feature = pd.merge(df_feature, df_woe, how='left', on=feature)
+
+            df[feature+'_bin'] = df_feature[feature]
+            df[feature+'_woe'] = df_feature['woe']
+
+            del df_feature, df_woe
 
         if detail:
             #print("\n%s" % feature)
@@ -88,3 +121,5 @@ def univariate_analysis(df, feature, flag, bins=None, precision=2, detail=True):
                     va='bottom')
 
         plt.show()
+
+        return df

@@ -15,7 +15,7 @@ def agg_assign(gb, fdict):
         for cl, d in fdict.items()
         for nm, fn in d.items()
     }
-    pd.options.display.float_format = '{:.0f}'.format
+    #pd.options.display.float_format = '{:.0f}'.format
     return pd.DataFrame(data)
 
 
